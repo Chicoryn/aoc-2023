@@ -2,6 +2,7 @@ use std::io::{self, BufRead};
 
 use sscanf::scanf;
 
+#[derive(Default)]
 struct GameSet {
     red: usize,
     green: usize,
@@ -9,14 +10,8 @@ struct GameSet {
 }
 
 impl GameSet {
-    fn empty() -> GameSet {
-        GameSet { red: 0, green: 0, blue: 0 }
-    }
-
     fn parse(line: &str) -> GameSet {
-        let parts = line.split(",").collect::<Vec<_>>();
-
-        parts.iter()
+        line.split(",")
             .map(|part| part.trim())
             .fold(
                 GameSet { blue: 0, red: 0, green: 0 },
@@ -81,7 +76,7 @@ fn main() {
     let games = lines.iter().filter_map(|line| Game::parse(&line)).collect::<Vec<_>>();
 
     println!("{}", games.iter().filter(|game| game.is_feasible(12, 13, 14)).map(|game| game.id).sum::<usize>());
-    println!("{}", games.iter().map(|game| game.iter().fold(GameSet::empty(), |acc, game_set| acc.max(game_set)).power()).sum::<usize>());
+    println!("{}", games.iter().map(|game| game.iter().fold(GameSet::default(), |acc, game_set| acc.max(game_set)).power()).sum::<usize>());
 }
 
 #[cfg(test)]
@@ -109,7 +104,7 @@ mod tests {
         let games = LINES.iter().filter_map(|line| Game::parse(line)).collect::<Vec<_>>();
 
         assert_eq!(
-            games.iter().map(|game| game.iter().fold(GameSet::empty(), |acc, game_set| acc.max(game_set)).power()).sum::<usize>(),
+            games.iter().map(|game| game.iter().fold(GameSet::default(), |acc, game_set| acc.max(game_set)).power()).sum::<usize>(),
             2286
         );
     }
