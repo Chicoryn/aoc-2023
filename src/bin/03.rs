@@ -2,151 +2,71 @@ use std::io::{self, BufRead};
 
 type Grid<T> = Vec<Vec<T>>;
 
-fn mark_adjacent_grid(grid: &Grid<char>) -> Grid<bool> {
-    let mut adjacent_grid = vec![vec![false; grid[0].len() + 1]; grid.len() + 1];
-
-    for i in 0..grid.len() {
-        for j in 0..grid[i].len() {
-            match grid[i][j] {
-                '0'..='9' => { /* pass */ },
-                '.' => { /* pass */ },
-                _ => {
-                    if i > 0 && j > 0 {
-                        adjacent_grid[i-1][j-1] = true;
-                    }
-                    if j > 0 {
-                        adjacent_grid[i+0][j-1] = true;
-                    }
-                    adjacent_grid[i+1][j-1] = true;
-                    if i > 0 {
-                        adjacent_grid[i-1][j+0] = true;
-                    }
-                    adjacent_grid[i+1][j+0] = true;
-                    if i > 0 {
-                        adjacent_grid[i-1][j+1] = true;
-                    }
-                    adjacent_grid[i+0][j+1] = true;
-                    adjacent_grid[i+1][j+1] = true;
-                }
-            }
-        }
+fn try_parse_number_at(grid: &Grid<char>, i: usize, j: usize) -> Option<(usize, usize, usize)> {
+    if i >= grid.len() || j >= grid[i].len() {
+        return None;
+    } else if !grid[i][j].is_digit(10) {
+        return None;
     }
 
-    adjacent_grid
+    let lower = (0..=j).rev().take_while(|&j| grid[i][j].is_digit(10)).last().unwrap();
+    let upper = (j..grid[i].len()).take_while(|&j| grid[i][j].is_digit(10)).last().unwrap();
+
+    grid[i][lower..=upper].iter().collect::<String>().parse::<usize>().ok()
+        .map(|number| (i, lower, number))
 }
 
-fn parse_marked_numbers(grid: &Grid<char>, adjacent_grid: &Grid<bool>) -> Vec<usize> {
-    let mut numbers = vec! [];
-    let mut number = 0;
-    let mut marked = false;
-
-    for i in 0..grid.len() {
-        for j in 0..grid[i].len() {
-            match grid[i][j] {
-                '0'..='9' => {
-                    number = number * 10 + grid[i][j].to_digit(10).unwrap() as usize;
-                    marked = marked || adjacent_grid[i][j];
-                },
-                _ => {
-                    if marked {
-                        numbers.push(number);
-                    }
-
-                    number = 0;
-                    marked = false;
-                },
-            }
-        }
-
-        if marked {
-            numbers.push(number);
-        }
-
-        number = 0;
-        marked = false;
-    }
-
-    numbers
+fn parse_numbers_adjacent_to(grid: &Grid<char>, i: usize, j: usize) -> Vec<(usize, usize, usize)> {
+    [
+        (i.wrapping_sub(1), j.wrapping_sub(1)),
+        (i.wrapping_add(0), j.wrapping_sub(1)),
+        (i.wrapping_add(1), j.wrapping_sub(1)),
+        (i.wrapping_sub(1), j.wrapping_add(0)),
+        (i.wrapping_add(1), j.wrapping_add(0)),
+        (i.wrapping_sub(1), j.wrapping_add(1)),
+        (i.wrapping_add(0), j.wrapping_add(1)),
+        (i.wrapping_add(1), j.wrapping_add(1)),
+    ].into_iter()
+        .filter_map(|(i, j)| try_parse_number_at(grid, i, j))
+        .collect::<Vec<_>>()
 }
 
-fn parse_adjacent_numbers(grid: &Grid<char>) -> Grid<Vec<usize>> {
-    let mut grid_numbers = vec! [vec! [vec! []; grid[0].len() + 2]; grid.len() + 2];
-    let mut positions = vec! [];
-    let mut number = 0;
+fn parse_part_numbers(grid: &Grid<char>) -> impl Iterator<Item=usize> + '_ {
+    let mut part_numbers = (0..grid.len())
+        .flat_map(|i| (0..grid[i].len()).map(move |j| (i, j)))
+        .filter(|&(i, j)| grid[i][j] != '.' && !grid[i][j].is_digit(10))
+        .flat_map(|(i, j)| parse_numbers_adjacent_to(grid, i, j))
+        .collect::<Vec<_>>();
 
-    for i in 0..grid.len() {
-        for j in 0..grid[i].len() {
-            if let Some(digit) = grid[i][j].to_digit(10) {
-                number = number * 10 + digit as usize;
-                positions.push((i, j));
+    part_numbers.sort_unstable();
+    part_numbers.dedup();
+    part_numbers.into_iter().map(|(_i, _j, number)| number)
+}
+
+fn parse_gears(grid: &Grid<char>) -> impl Iterator<Item=Vec<usize>> + '_ {
+    (0..grid.len())
+        .flat_map(|i| (0..grid[i].len()).map(move |j| (i, j)))
+        .filter(|&(i, j)| grid[i][j] == '*')
+        .filter_map(|(i, j)| {
+            let mut numbers = parse_numbers_adjacent_to(grid, i, j);
+            numbers.sort_unstable();
+            numbers.dedup();
+
+            if numbers.len() == 2 {
+                Some(numbers.into_iter().map(|(_i, _j, number)| number).collect::<Vec<_>>())
             } else {
-                let mut adjacent_positions = positions.drain(..).flat_map(|(i, j)| {
-                    vec! [
-                        (i+0, j+0), (i+0, j+1), (i+0, j+2),
-                        (i+1, j+0), (i+1, j+1), (i+1, j+2),
-                        (i+2, j+0), (i+2, j+1), (i+2, j+2),
-                    ]
-                }).collect::<Vec<_>>();
-
-                adjacent_positions.sort_unstable();
-                adjacent_positions.dedup();
-
-                for (i, j) in adjacent_positions {
-                    grid_numbers[i][j].push(number);
-                }
-
-                number = 0;
+                None
             }
-        }
-
-        if number > 0 {
-            let mut adjacent_positions = positions.drain(..).flat_map(|(i, j)| {
-                vec! [
-                    (i+0, j+0), (i+0, j+1), (i+0, j+2),
-                    (i+1, j+0), (i+1, j+1), (i+1, j+2),
-                    (i+2, j+0), (i+2, j+1), (i+2, j+2),
-                ]
-            }).collect::<Vec<_>>();
-
-            adjacent_positions.sort_unstable();
-            adjacent_positions.dedup();
-
-            for (i, j) in adjacent_positions {
-                grid_numbers[i][j].push(number);
-            }
-
-            number = 0;
-        }
-    }
-
-    grid_numbers
-}
-
-fn parse_gears(grid: &Grid<char>, adjacent_numbers: &Grid<Vec<usize>>) -> Vec<usize> {
-    let mut gears = vec![];
-
-    for i in 0..grid.len() {
-        for j in 0..grid[i].len() {
-            if grid[i][j] == '*' && adjacent_numbers[i+1][j+1].len() == 2 {
-                gears.push(adjacent_numbers[i+1][j+1].iter().product::<usize>());
-            }
-        }
-    }
-
-    gears
+        })
 }
 
 fn main() {
     let stdin = io::stdin().lock();
     let lines = stdin.lines().filter_map(Result::ok).collect::<Vec<_>>();
     let grid: Vec<Vec<char>> = lines.into_iter().map(|line| line.chars().collect::<Vec<_>>()).collect::<Vec<_>>();
-    let adjacent_grid = mark_adjacent_grid(&grid);
-    let numbers: Vec<usize> = parse_marked_numbers(&grid, &adjacent_grid);
-    let adjacent_numbers = parse_adjacent_numbers(&grid);
-    let gears = parse_gears(&grid, &adjacent_numbers);
 
-    println!("{}", numbers.iter().sum::<usize>()); // 553825
-    println!("{}", gears.into_iter().sum::<usize>());
+    println!("{}", parse_part_numbers(&grid).sum::<usize>());
+    println!("{}", parse_gears(&grid).map(|numbers| numbers.iter().product::<usize>()).sum::<usize>());
 }
 
 #[cfg(test)]
@@ -169,18 +89,14 @@ mod test {
     #[test]
     fn _01() {
         let grid = LINES.into_iter().map(|line| line.chars().collect::<Vec<_>>()).collect::<Vec<_>>();
-        let adjacent_grid = mark_adjacent_grid(&grid);
-        let numbers = parse_marked_numbers(&grid, &adjacent_grid);
 
-        assert_eq!(numbers.into_iter().sum::<usize>(), 4361);
+        assert_eq!(parse_part_numbers(&grid).sum::<usize>(), 4361);
     }
 
     #[test]
     fn _02() {
         let grid: Vec<Vec<char>> = LINES.into_iter().map(|line| line.chars().collect::<Vec<_>>()).collect::<Vec<_>>();
-        let adjacent_numbers = parse_adjacent_numbers(&grid);
-        let gears = parse_gears(&grid, &adjacent_numbers);
 
-        assert_eq!(gears.into_iter().sum::<usize>(), 467835);
+        assert_eq!(parse_gears(&grid).map(|numbers| numbers.iter().product::<usize>()).sum::<usize>(), 467835);
     }
 }
