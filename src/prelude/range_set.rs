@@ -98,12 +98,12 @@ impl<T: Ord + Copy> RangeSet<T> {
     pub fn push(&mut self, range: Range<T>) {
         let mut range: OrderedRange<T> = OrderedRange::new(range.clone());
 
-        if let Some(overlapping_range) = self.ranges.range(..=range.clone()).next_back().filter(|r| r.end() > range.start()).cloned() {
+        while let Some(overlapping_range) = self.ranges.range(..=range.clone()).next_back().filter(|r| r.end() > range.start()).cloned() {
             range = OrderedRange::new(overlapping_range.start()..range.end().max(overlapping_range.end()));
             self.ranges.remove(&overlapping_range);
         }
 
-        if let Some(overlapping_range) = self.ranges.range(range.clone()..).next().filter(|r| r.start() < range.end()).cloned() {
+        while let Some(overlapping_range) = self.ranges.range(range.clone()..).next().filter(|r| r.start() < range.end()).cloned() {
             range = OrderedRange::new(range.start()..overlapping_range.end().max(range.end()));
             self.ranges.remove(&overlapping_range);
         }
@@ -134,6 +134,7 @@ mod tests {
         ranges.push(20..30);
         ranges.push(25..35);
         ranges.push(150..170);
+        ranges.push(120..130);
         ranges.push(100..200);
 
         assert_eq!(ranges.into_iter().collect::<Vec<_>>(), vec! [0..15, 20..35, 100..200]);
