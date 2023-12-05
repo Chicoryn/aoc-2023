@@ -69,9 +69,10 @@ pub struct RangeSet<T: Ord + Copy> {
 
 impl<T: Ord + Copy> FromIterator<Range<T>> for RangeSet<T> {
     fn from_iter<I: IntoIterator<Item = Range<T>>>(iter: I) -> Self {
-        Self {
-            ranges: iter.into_iter().map(OrderedRange::from).collect()
-        }
+        iter.into_iter().fold(Self::new(), |mut set, range| {
+            set.push(range);
+            set
+        })
     }
 }
 
@@ -134,23 +135,25 @@ mod tests {
 
     #[test]
     fn overlapping() {
-        let mut ranges = RangeSet::new();
-        ranges.push(5..15);
-        ranges.push(0..10);
-        ranges.push(20..30);
-        ranges.push(25..35);
-        ranges.push(150..170);
-        ranges.push(120..130);
-        ranges.push(100..200);
+        let ranges = RangeSet::from([
+            0..10,
+            5..15,
+            20..30,
+            25..35,
+            150..170,
+            120..130,
+            100..200,
+        ]);
 
         assert_eq!(ranges.into_iter().collect::<Vec<_>>(), vec! [0..15, 20..35, 100..200]);
     }
 
     #[test]
     fn non_overlapping() {
-        let mut ranges = RangeSet::new();
-        ranges.push(0..10);
-        ranges.push(20..30);
+        let ranges = RangeSet::from([
+            0..10,
+            20..30,
+        ]);
 
         assert_eq!(ranges.into_iter().collect::<Vec<_>>(), vec! [0..10, 20..30]);
     }
