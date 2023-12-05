@@ -44,10 +44,9 @@ struct Map {
 
 impl Map {
     fn translate(&self, range: Range<usize>) -> RangeSet<usize> {
-        let mut remaining = RangeSet::new();
+        let mut remaining = RangeSet::from([range]);
         let mut output = RangeSet::new();
 
-        remaining.push(range);
         while let Some(range) = remaining.pop() {
             if let Some((translated_range, remaining_ranges)) = self.converters.iter().find_map(|converter| converter.translate(range.clone())) {
                 remaining.extend(remaining_ranges);
@@ -108,10 +107,9 @@ impl Almanac {
     }
 
     fn translate(&self, seed: Range<usize>) -> RangeSet<usize> {
-        let mut ranges = RangeSet::new();
+        let mut ranges = RangeSet::from([seed]);
         let mut name = "seed".to_string();
 
-        ranges.push(seed);
         while let Some(map) = self.maps.get(&name) {
             ranges = ranges.iter().flat_map(|range| map.translate(range.clone())).collect();
             name = map.dst.clone();

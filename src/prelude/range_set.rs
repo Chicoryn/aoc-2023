@@ -84,6 +84,12 @@ impl<T: Ord + Copy> IntoIterator for RangeSet<T> {
     }
 }
 
+impl<T: Ord + Copy, const N: usize> From<[Range<T>; N]> for RangeSet<T> {
+    fn from(ranges: [Range<T>; N]) -> Self {
+        Self::from_iter(ranges.into_iter())
+    }
+}
+
 impl<T: Ord + Copy> RangeSet<T> {
     pub fn new() -> Self {
         Self {
@@ -96,7 +102,7 @@ impl<T: Ord + Copy> RangeSet<T> {
     }
 
     pub fn push(&mut self, range: Range<T>) {
-        let mut range: OrderedRange<T> = OrderedRange::new(range.clone());
+        let mut range = OrderedRange::new(range.clone());
 
         while let Some(overlapping_range) = self.ranges.range(..=range.clone()).next_back().filter(|r| r.end() > range.start()).cloned() {
             range = OrderedRange::new(overlapping_range.start()..range.end().max(overlapping_range.end()));
