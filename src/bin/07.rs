@@ -1,10 +1,10 @@
 use std::{collections::HashMap, io::{self, BufRead}, ops::AddAssign};
 
 const CARDS: &str = "AKQJT98765432";
-const JOKER_CARDS: &str = "AKQT98765432J";
+const CARDS_WITH_JOKER: &str = "AKQT98765432J";
 
-#[derive(Debug, PartialEq, Eq)]
-enum Strength {
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum HandType {
     Five,
     Four,
     FullHouse,
@@ -12,32 +12,6 @@ enum Strength {
     TwoPairs,
     OnePair,
     HighCard,
-}
-
-impl PartialOrd for Strength {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.rank().partial_cmp(&other.rank())
-    }
-}
-
-impl Ord for Strength {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.rank().cmp(&other.rank())
-    }
-}
-
-impl Strength {
-    fn rank(&self) -> usize {
-        match self {
-            Strength::Five => 0,
-            Strength::Four => 1,
-            Strength::FullHouse => 2,
-            Strength::Three => 3,
-            Strength::TwoPairs => 4,
-            Strength::OnePair => 5,
-            Strength::HighCard => 6,
-        }
-    }
 }
 
 struct Hand {
@@ -54,90 +28,41 @@ impl Hand {
         Some(Hand { cards, bid })
     }
 
-    fn strength(&self, include_joker: bool) -> Strength {
+    fn hand_type(&self, joker: Option<char>) -> HandType {
         let histogram = self.cards.iter().fold(
-            HashMap::new(),
+            HashMap::with_capacity(5),
             |mut histogram, &card| {
                 histogram.entry(card).or_insert(0).add_assign(1);
                 histogram
             }
         );
-        let mut pairs = histogram.into_iter()
-            .filter_map(|(card, count)| if count > 0 { Some((card, count)) } else { None })
+        let mut pairs = histogram.iter()
+            .filter_map(|(&card, &count)| if Some(card) == joker { None } else { Some(count) })
             .collect::<Vec<_>>();
-        pairs.sort_by_key(|&(card, count)| (-count, card));
+        pairs.sort_by_key(|&count| -count);
+        pairs.resize(5, 0);
 
-        if pairs.len() == 1 {
-            Strength::Five
-        } else if pairs.len() == 2 {
-            if pairs[0].1 == 4 {
-                debug_assert!(pairs[0].1 == 4 && pairs[1].1 == 1);
+        if let Some(num_jokers) = joker.and_then(|joker| histogram.get(&joker)) {
+            pairs[0] += num_jokers;
+        }
 
-                if include_joker && (pairs[0].0 == 'J' || pairs[1].0 == 'J') {
-                    Strength::Five
-                } else {
-                    Strength::Four
-                }
-            } else {
-                debug_assert!(pairs[0].1 == 3 && pairs[1].1 == 2);
-
-                if include_joker && (pairs[0].0 == 'J' || pairs[1].0 == 'J') {
-                    Strength::Five
-                } else {
-                    Strength::FullHouse
-                }
-            }
-        } else if pairs.len() == 3 {
-            if pairs[0].1 == 3 {
-                debug_assert!(pairs[0].1 == 3 && pairs[1].1 == 1 && pairs[2].1 == 1);
-
-                if include_joker && (pairs[0].0 == 'J' || pairs[1].0 == 'J' || pairs[2].0 == 'J') {
-                    Strength::Four
-                } else {
-                    Strength::Three
-                }
-            } else {
-                debug_assert!(pairs[0].1 == 2 && pairs[1].1 == 2 && pairs[2].1 == 1);
-
-                if include_joker && (pairs[0].0 == 'J' || pairs[1].0 == 'J') {
-                    Strength::Four
-                } else if include_joker && pairs[2].0 == 'J' {
-                    Strength::FullHouse
-                } else {
-                    Strength::TwoPairs
-                }
-            }
-        } else if pairs.len() == 4 {
-            debug_assert!(pairs[0].1 == 2 && pairs[1].1 == 1 && pairs[2].1 == 1 && pairs[3].1 == 1);
-
-            if include_joker && (pairs[0].0 == 'J' || pairs[1].0 == 'J' || pairs[2].0 == 'J' || pairs[3].0 == 'J') {
-                Strength::Three
-            } else {
-                Strength::OnePair
-            }
-        } else {
-            debug_assert!(pairs[0].1 == 1 && pairs[1].1 == 1 && pairs[2].1 == 1 && pairs[3].1 == 1 && pairs[4].1 == 1);
-
-            if include_joker && (pairs[0].0 == 'J' || pairs[1].0 == 'J' || pairs[2].0 == 'J' || pairs[3].0 == 'J' || pairs[4].0 == 'J') {
-                Strength::OnePair
-            } else {
-                Strength::HighCard
-            }
+        match &pairs[..5] {
+            [5, 0, 0, 0, 0] => HandType::Five,
+            [4, 1, 0, 0, 0] => HandType::Four,
+            [3, 2, 0, 0, 0] => HandType::FullHouse,
+            [3, 1, 1, 0, 0] => HandType::Three,
+            [2, 2, 1, 0, 0] => HandType::TwoPairs,
+            [2, 1, 1, 1, 0] => HandType::OnePair,
+            [1, 1, 1, 1, 1] => HandType::HighCard,
+            _ => unreachable!(),
         }
     }
 
-    fn key(&self, include_joker: bool) -> (Strength, Vec<usize>) {
-        let ordering =
-            if include_joker {
-                JOKER_CARDS
-            } else {
-                CARDS
-            };
-
+    fn key(&self, cards: &str, joker: Option<char>) -> (HandType, Vec<usize>) {
         (
-            self.strength(include_joker),
+            self.hand_type(joker),
             self.cards.iter()
-                .map(|&ch| ordering.find(ch).unwrap())
+                .map(|&ch| cards.find(ch).unwrap())
                 .collect()
         )
     }
@@ -148,10 +73,10 @@ fn main() {
     let lines = stdin.lines().filter_map(Result::ok).collect::<Vec<_>>();
     let mut hands = lines.iter().filter_map(|line: &String| Hand::parse(line)).collect::<Vec<_>>();
 
-    hands.sort_by_key(|hand| hand.key(false));
+    hands.sort_by_key(|hand| hand.key(CARDS, None));
     println!("{}", hands.iter().rev().enumerate().map(|(i, hand)| hand.bid * (i + 1)).sum::<usize>());
 
-    hands.sort_by_key(|hand| hand.key(true));
+    hands.sort_by_key(|hand| hand.key(CARDS_WITH_JOKER, Some('J')));
     println!("{}", hands.iter().rev().enumerate().map(|(i, hand)| hand.bid * (i + 1)).sum::<usize>());
 }
 
@@ -170,20 +95,20 @@ mod tests {
     #[test]
     fn _01() {
         let mut hands = LINES.iter().filter_map(|line| Hand::parse(line)).collect::<Vec<_>>();
-        hands.sort_by_key(|hand: &Hand| hand.key(false));
+        hands.sort_by_key(|hand: &Hand| hand.key(CARDS, None));
 
-        assert_eq!(Hand::parse("AAAAA 0").unwrap().strength(false), Strength::Five);
-        assert_eq!(Hand::parse("AA8AA 0").unwrap().strength(false), Strength::Four);
-        assert_eq!(Hand::parse("23332 0").unwrap().strength(false), Strength::FullHouse);
-        assert_eq!(Hand::parse("23456 0").unwrap().strength(false), Strength::HighCard);
+        assert_eq!(Hand::parse("AAAAA 0").unwrap().hand_type(None), HandType::Five);
+        assert_eq!(Hand::parse("AA8AA 0").unwrap().hand_type(None), HandType::Four);
+        assert_eq!(Hand::parse("23332 0").unwrap().hand_type(None), HandType::FullHouse);
+        assert_eq!(Hand::parse("23456 0").unwrap().hand_type(None), HandType::HighCard);
         assert_eq!(
-            hands.iter().map(|hand| hand.strength(false)).collect::<Vec<_>>(),
+            hands.iter().map(|hand| hand.hand_type(None)).collect::<Vec<_>>(),
             vec! [
-                Strength::Three,
-                Strength::Three,
-                Strength::TwoPairs,
-                Strength::TwoPairs,
-                Strength::OnePair,
+                HandType::Three,
+                HandType::Three,
+                HandType::TwoPairs,
+                HandType::TwoPairs,
+                HandType::OnePair,
             ]
         );
         assert_eq!(hands.iter().rev().enumerate().map(|(i, hand)| hand.bid * (i + 1)).sum::<usize>(), 6440);
@@ -192,16 +117,16 @@ mod tests {
     #[test]
     fn _02() {
         let mut hands = LINES.iter().filter_map(|line| Hand::parse(line)).collect::<Vec<_>>();
-        hands.sort_by_key(|hand: &Hand| hand.key(true));
+        hands.sort_by_key(|hand: &Hand| hand.key(CARDS_WITH_JOKER, Some('J')));
 
         assert_eq!(
-            hands.iter().map(|hand| hand.strength(true)).collect::<Vec<_>>(),
+            hands.iter().map(|hand| hand.hand_type(Some('J'))).collect::<Vec<_>>(),
             vec! [
-                Strength::Four,
-                Strength::Four,
-                Strength::Four,
-                Strength::TwoPairs,
-                Strength::OnePair,
+                HandType::Four,
+                HandType::Four,
+                HandType::Four,
+                HandType::TwoPairs,
+                HandType::OnePair,
             ]
         );
         assert_eq!(hands.iter().rev().enumerate().map(|(i, hand)| hand.bid * (i + 1)).sum::<usize>(), 5905);
