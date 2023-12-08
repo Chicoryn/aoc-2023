@@ -1,5 +1,6 @@
 use std::{collections::HashMap, io::{self, BufRead}};
 
+use aoc_2023::prelude::lcm;
 use sscanf::sscanf;
 
 #[derive(sscanf::FromScanf)]
@@ -54,32 +55,22 @@ impl Puzzle {
         Self { directions, network }
     }
 
-    fn follow_directions(&self, start_suffix: &str, end_suffix: &str) -> usize {
+    fn follow_directions(&self, start_suffix: &str, end_suffix: &str) -> u64 {
         let mut current_nodes = self.network.nodes().filter(|node| node.ends_with(start_suffix)).collect::<Vec<_>>();
         let mut visited_at = vec! [HashMap::<(&str, usize), usize>::new(); current_nodes.len()];
-        let mut cycle_length = vec! [(0usize, 0usize); current_nodes.len()];
+        let mut cycle_length = vec! [0; current_nodes.len()];
 
         for (step, (direction_index, &direction)) in self.directions.iter().enumerate().cycle().enumerate() {
             if current_nodes.iter().all(|node| node.ends_with(end_suffix)) {
-                return step;
-            } else if cycle_length.iter().all(|&(_offset, len)| len > 0) {
-                let max_cycle = cycle_length.iter().max_by_key(|&(offset, _len)| offset).unwrap();
-                let mut count = 0;
-
-                loop {
-                    let steps = max_cycle.0 + max_cycle.1 * count;
-                    count += 1;
-
-                    if cycle_length.iter().all(|&(offset, len)| (steps - offset) % len == 0) {
-                        return steps;
-                    }
-                }
+                return step as u64;
+            } else if cycle_length.iter().all(|&len| len > 0) {
+                return lcm(&cycle_length);
             }
 
             for (i, node) in current_nodes.iter_mut().enumerate() {
-                if node.ends_with(end_suffix) && cycle_length[i].1 == 0 {
+                if node.ends_with(end_suffix) && cycle_length[i] == 0 {
                     if let Some(&at) = visited_at[i].get(&(node, direction_index)) {
-                        cycle_length[i] = (at, step - at);
+                        cycle_length[i] = (step - at) as u64;
                     }
 
                     visited_at[i].insert((node, direction_index), step);
