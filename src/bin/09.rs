@@ -13,6 +13,10 @@ impl ReportHistory {
         Self { numbers }
     }
 
+    fn rev(&self) -> Self {
+        ReportHistory { numbers: self.numbers.iter().rev().copied().collect() }
+    }
+
     fn differences(&self) -> Vec<Vec<i64>> {
         let mut differences = vec! [self.numbers.clone()];
 
@@ -32,13 +36,6 @@ impl ReportHistory {
             .filter_map(|diff| diff.last())
             .sum()
     }
-
-    fn prev_number(&self) -> i64 {
-        self.differences().iter()
-            .rev()
-            .filter_map(|diff| diff.first())
-            .fold(0, |acc, &x| x - acc)
-    }
 }
 
 fn main() {
@@ -46,7 +43,7 @@ fn main() {
     let lines = stdin.lock().lines().filter_map(Result::ok).collect::<Vec<_>>();
 
     println!("{}", lines.iter().map(|line| ReportHistory::parse(line).next_number()).sum::<i64>());
-    println!("{}", lines.iter().map(|line| ReportHistory::parse(line).prev_number()).sum::<i64>());
+    println!("{}", lines.iter().map(|line| ReportHistory::parse(line).rev().next_number()).sum::<i64>());
 }
 
 #[cfg(test)]
@@ -70,7 +67,7 @@ mod tests {
     #[test]
     fn _02() {
         assert_eq!(
-            LINES.iter().map(|line| ReportHistory::parse(line).prev_number()).collect::<Vec<_>>(),
+            LINES.iter().map(|line| ReportHistory::parse(line).rev().next_number()).collect::<Vec<_>>(),
             vec! [-3, 0, 5]
         );
     }
