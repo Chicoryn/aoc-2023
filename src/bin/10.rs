@@ -1,4 +1,4 @@
-use std::{io::{self, BufRead}, fmt::{self, Display, Formatter}};
+use std::{io::{self, BufRead}, collections::VecDeque};
 
 use micro_ndarray::Array;
 
@@ -6,39 +6,6 @@ use micro_ndarray::Array;
 struct PipeGrid {
     array: Array<char, 2>,
     is_padding: Array<bool, 2>,
-}
-
-impl Display for PipeGrid {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut is_pipe = Array::new_with(self.array.size(), false);
-
-        for (point, &distance) in self.traverse_pipe().iter() {
-            is_pipe[point] = distance != usize::MAX;
-        }
-
-        for row in 0..self.array.size()[1] {
-            for col in 0..self.array.size()[0] {
-                if self.array[[col, row]] == '.' {
-                    if self.is_enclosed([col, row], &is_pipe) {
-                        if self.is_padding[[col, row]] {
-                            write!(f, "i")?;
-                        } else {
-                            write!(f, "I")?;
-                        }
-                    } else {
-                        write!(f, "O")?;
-
-                    }
-                } else {
-                    write!(f, "{}", self.array[[col, row]])?;
-                }
-            }
-
-            writeln!(f)?;
-        }
-
-        Ok(())
-    }
 }
 
 impl PipeGrid {
@@ -68,42 +35,21 @@ impl PipeGrid {
 
                 array[[col * 2 + 0, row * 2 + 0]] = self.array[[col, row]];
                 array[[col * 2 + 1, row * 2 + 1]] = '.';
-
-                match self.array[[col, row]] {
-                    'S' => {
-                        array[[col * 2 + 0, row * 2 + 1]] = 'S';
-                        array[[col * 2 + 1, row * 2 + 0]] = 'S';
-                    },
-                    '.' => {
-                        array[[col * 2 + 0, row * 2 + 1]] = '.';
-                        array[[col * 2 + 1, row * 2 + 0]] = '.';
-                    },
-                    '|' => {
-                        array[[col * 2 + 0, row * 2 + 1]] = '|';
-                        array[[col * 2 + 1, row * 2 + 0]] = '.';
-                    },
-                    '-' => {
-                        array[[col * 2 + 0, row * 2 + 1]] = '.';
-                        array[[col * 2 + 1, row * 2 + 0]] = '-';
-                    },
-                    'L' => {
-                        array[[col * 2 + 0, row * 2 + 1]] = '.';
-                        array[[col * 2 + 1, row * 2 + 0]] = '-';
-                    },
-                    'J' => {
-                        array[[col * 2 + 0, row * 2 + 1]] = '.';
-                        array[[col * 2 + 1, row * 2 + 0]] = '.';
-                    },
-                    '7' => {
-                        array[[col * 2 + 0, row * 2 + 1]] = '|';
-                        array[[col * 2 + 1, row * 2 + 0]] = '.';
-                    },
-                    'F' => {
-                        array[[col * 2 + 0, row * 2 + 1]] = '|';
-                        array[[col * 2 + 1, row * 2 + 0]] = '-';
-                    },
-                    _ => unreachable!(),
-                }
+                [
+                    array[[col * 2 + 0, row * 2 + 1]],
+                    array[[col * 2 + 1, row * 2 + 0]],
+                ] =
+                    match self.array[[col, row]] {
+                        'S' => ['S', 'S'],
+                        '.' => ['.', '.'],
+                        '|' => ['|', '.'],
+                        '-' => ['.', '-'],
+                        'L' => ['.', '-'],
+                        'J' => ['.', '.'],
+                        '7' => ['|', '.'],
+                        'F' => ['|', '-'],
+                        _ => unreachable!(),
+                    };
             }
         }
 
@@ -162,11 +108,12 @@ impl PipeGrid {
         distance_to
     }
 
-    fn is_enclosed(&self, starting_point: [usize; 2], is_pipe: &Array<bool, 2>) -> bool {
-        let mut remaining = vec! [starting_point];
+    fn is_enclosed(&self, starting_point: [usize; 2], is_pipe: &Array<bool, 2>) -> (bool, Array<bool, 2>) {
+        let mut remaining = VecDeque::from([starting_point]);
         let mut visited = Array::new_with(self.array.size(), false);
+        visited[starting_point] = true;
 
-        while let Some(point) = remaining.pop() {
+        while let Some(point) = remaining.pop_front() {
             let neighbours = [
                 [point[0], point[1].wrapping_sub(1)],
                 [point[0], point[1].wrapping_add(1)],
@@ -176,29 +123,50 @@ impl PipeGrid {
 
             for neighbour in neighbours.into_iter() {
                 if self.array.get(neighbour) == None {
-                    return false;
+                    return (false, visited);
                 } else if !visited[neighbour] && !is_pipe[neighbour] {
-                    remaining.push(neighbour);
+                    remaining.push_back(neighbour);
                 }
 
                 visited[neighbour] = true;
             }
         }
 
-        true
+        (true, visited)
     }
 
     fn enclosed_area(&self) -> usize {
-        let mut is_pipe = Array::new_with(self.array.size(), false);
+        let is_pipe = Array::from_flat(
+            self.traverse_pipe().iter().map(|(_, &distance)| distance != usize::MAX).collect(),
+            self.array.size(),
+        ).unwrap();
 
-        for (point, &distance) in self.traverse_pipe().iter() {
-            is_pipe[point] = distance != usize::MAX;
+        let mut enclosed = Array::new_with(self.array.size(), None);
+        let mut count = 0;
+
+        for (point, _) in self.array.iter() {
+            if is_pipe[point] || self.is_padding[point] {
+                // pass
+            } else if let Some(is_enclosed) = enclosed[point] {
+                if is_enclosed {
+                    count += 1;
+                }
+            } else  {
+                let (is_enclosed, enclosed_) = self.is_enclosed(point, &is_pipe);
+
+                if is_enclosed {
+                    for (point, &is_enclosed_) in enclosed_.iter() {
+                        debug_assert!(enclosed[point] == None);
+
+                        enclosed[point] = Some(is_enclosed_);
+                    }
+
+                    count += 1;
+                }
+            }
         }
 
-        self.array.iter()
-            .filter(|&(point, _)| !is_pipe[point] && self.is_enclosed(point, &is_pipe))
-            .filter(|&(point, _)| !self.is_padding[point])
-            .count()
+        count
     }
 
     fn max_distance(&self) -> usize {
@@ -256,7 +224,7 @@ mod tests {
         "....L---J.LJ.LJLJ...",
     ];
 
-    const LARGE_LINES_2: [&str; 10] = [
+    const EXTRA_TILES_LINES: [&str; 10] = [
         "FF7FSF7F7F7F7F7F---7",
         "L|LJ||||||||||||F--J",
         "FL-7LJLJ||||||LJL-77",
@@ -277,6 +245,13 @@ mod tests {
     }
 
     #[test]
+    fn _02() {
+        let pipe_grid: PipeGrid = PipeGrid::parse(&LARGE_LINES.iter().map(|s| s.to_string()).collect::<Vec<_>>()).unwrap();
+
+        assert_eq!(pipe_grid.padded().enclosed_area(), 8);
+    }
+
+    #[test]
     fn _02_squeeze() {
         let pipe_grid: PipeGrid = PipeGrid::parse(&SQUEEZE_LINES.iter().map(|s| s.to_string()).collect::<Vec<_>>()).unwrap();
 
@@ -285,15 +260,8 @@ mod tests {
 
     #[test]
     fn _02_extra_tiles() {
-        let pipe_grid: PipeGrid = PipeGrid::parse(&LARGE_LINES_2.iter().map(|s| s.to_string()).collect::<Vec<_>>()).unwrap();
+        let pipe_grid: PipeGrid = PipeGrid::parse(&EXTRA_TILES_LINES.iter().map(|s| s.to_string()).collect::<Vec<_>>()).unwrap();
 
         assert_eq!(pipe_grid.padded().enclosed_area(), 10);
-    }
-
-    #[test]
-    fn _02() {
-        let pipe_grid: PipeGrid = PipeGrid::parse(&LARGE_LINES.iter().map(|s| s.to_string()).collect::<Vec<_>>()).unwrap();
-
-        assert_eq!(pipe_grid.padded().enclosed_area(), 8);
     }
 }
