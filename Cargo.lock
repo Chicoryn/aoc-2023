@@ -15,6 +15,7 @@ dependencies = [
 name = "aoc-2023"
 version = "0.1.0"
 dependencies = [
+ "micro_ndarray",
  "sscanf",
 ]
 
@@ -48,6 +49,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ident_concat"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "036f59fb8c94121b07f1865beebfe61c15d3a874f0d1d3a2db737cdb2e98d412"
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -58,6 +65,16 @@ name = "memchr"
 version = "2.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f665ee40bc4a3c5590afb1e9677db74a508659dfd71e126420da8274909a0167"
+
+[[package]]
+name = "micro_ndarray"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f93bb6fb564d7c0ddeea62505d593442976ed15e09c04bbb3275bd6d311ca59"
+dependencies = [
+ "ident_concat",
+ "vec_split",
+]
 
 [[package]]
 name = "proc-macro2"
@@ -179,3 +196,9 @@ name = "unicode-xid"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f962df74c8c05a667b5ee8bcf162993134c104e96440b663c8daa176dc772d8c"
+
+[[package]]
+name = "vec_split"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0e1a6038ca5e0183c36a9f19c0610277a0cd91680f2fbe37ccd2e7798cfc93b"
