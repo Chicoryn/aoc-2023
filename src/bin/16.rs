@@ -1,5 +1,7 @@
 use std::{io::{self, BufRead}, collections::{HashMap, HashSet}};
 
+use rayon::prelude::*;
+
 struct Contraption {
     grid: HashMap<(i32, i32), char>,
     max: (i32, i32),
@@ -23,6 +25,7 @@ impl Contraption {
         let cols = (0..self.max.1).flat_map(|col| [ ((0, col), (1, 0)), ((self.max.0 - 1, col), (-1, 0)) ]);
 
         rows.chain(cols)
+            .par_bridge()
             .map(|(point, direction)| self.energized(point, direction))
             .max()
             .unwrap_or(0)
