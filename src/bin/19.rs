@@ -154,10 +154,6 @@ impl Part {
             let leftovers = workflow.rules.iter().fold(
                 part,
                 |leftovers, rule| {
-                    if leftovers.is_empty() {
-                        return leftovers;
-                    }
-
                     let (new_part, remaining_part) = rule.split(&leftovers);
 
                     if new_part.is_empty() {
