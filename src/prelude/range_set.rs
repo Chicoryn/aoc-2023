@@ -118,6 +118,16 @@ impl<T: Ord + Copy> RangeSet<T> {
         self.ranges.insert(range);
     }
 
+    pub fn get(&self, value: &T) -> Option<Range<T>> {
+        let range = OrderedRange::new(*value..*value);
+
+        self.ranges.range(..=range).next_back().filter(|r| r.range.contains(&value)).map(|r| r.range.clone())
+    }
+
+    pub fn contains(&self, value: T) -> bool {
+        self.get(&value).is_some()
+    }
+
     pub fn pop(&mut self) -> Option<Range<T>> {
         self.ranges.pop_last().map(|r| r.range)
     }
@@ -156,5 +166,17 @@ mod tests {
         ]);
 
         assert_eq!(ranges.into_iter().collect::<Vec<_>>(), vec! [0..10, 20..30]);
+    }
+
+    #[test]
+    fn contains() {
+        let ranges = RangeSet::from([
+            0..10,
+            20..30
+        ]);
+
+        for i in 0..50 {
+            assert_eq!(ranges.contains(i), (0..10).contains(&i) || (20..30).contains(&i));
+        }
     }
 }
