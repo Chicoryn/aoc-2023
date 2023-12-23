@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Range};
 
 pub struct CooMatrix2D<T> {
     data: HashMap<(i32, i32), T>,
@@ -36,6 +36,14 @@ impl<T> CooMatrix2D<T> {
             lower: (i32::MAX, i32::MAX),
             upper: (i32::MIN, i32::MIN),
         }
+    }
+
+    pub fn rows(&self) -> Range<i32> {
+        self.lower.0..self.upper.0
+    }
+
+    pub fn cols(&self) -> Range<i32> {
+        self.lower.1..self.upper.1
     }
 
     pub fn min(&self) -> (i32, i32) {
